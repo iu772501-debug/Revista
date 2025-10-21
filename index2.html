@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Flipbook Dinámico</title>
+
+  <style>
+    body {
+      background: #26c6da;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      font-family: sans-serif;
+    }
+
+    .flipbook {
+      width: 800px;
+      height: 500px;
+      margin-top: 20px;
+    }
+
+    .page {
+      background: white;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
+      font-size: 18px;
+      padding: 10px;
+    }
+
+    .page img {
+      max-width: 100%;
+      max-height: 400px;
+    }
+
+    input {
+      margin-top: 15px;
+    }
+  </style>
+</head>
+
+<body>
+  <h2>📘 Mi Libro Interactivo</h2>
+  <p>Sube un PDF o una carpeta de imágenes (img1, img2, ...)</p>
+
+  <input type="file" id="fileInput" multiple webkitdirectory>
+  <div class="flipbook"></div>
+
+  <!-- Librerías -->
+  <script src="jquery.js"></script>
+  <script src="turn.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js"></script>
+
+  <script>
+    const flipbook = $(".flipbook");
+    const pdfjsLib = window['pdfjs-dist/build/pdf'];
+    pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.worker.min.js";
+
+    document.getElementById('fileInput').addEventListener('change', handleFiles);
+
+    function handleFiles(e) {
+      const files = Array.from(e.target.files);
+      if (files.length === 0) return;
+
+      const firstFile = files[0];
+      const extension = firstFile.name.split('.').pop().toLowerCase();
+
+      if (extension === 'pdf') {
+        loadPDF(firstFile);
+      } else {
+        loadImages(files);
+      }
+    }
+
+    // ========================
+    // 📄 CARGAR PDF
+    // ========================
+    async function loadPDF(file) {
+      flipbook.html(''); // limpia
+      const pdfData = new Uint8Array(await file.arrayBuffer());
+      const pdf = await pdfjsLib.getDocument({ data: pdfData }).promise;
+
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const viewport = page.getViewport({ scale: 1.5 });
+        const canvas = document.createElement("canvas");
+        const context = canvas.getContext("2d");
+        canvas.height = viewport.height;
+        canvas.width = viewport.width;
+        await page.render({ canvasContext: context, viewport: viewport }).promise;
+
+        const img = document.createElement("img");
+        img.src = canvas.toDataURL("image/png");
+        const pageDiv = $('<div class="page"></div>').append(img);
+        flipbook.append(pageDiv);
+      }
+
+      initializeBook();
+    }
+
+    // ========================
+    // 🖼️ CARGAR IMÁGENES
+    // ========================
+    function loadImages(files) {
+      flipbook.html('');
+
+      const imageFiles = files
+        .filter(f => /\.(jpg|jpeg|png|gif)$/i.test(f.name))
+        .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+
+      let loaded = 0;
+
+      imageFiles.forEach(file => {
+        const reader = new FileReader();
+        reader.onload = e => {
+          const img = document.createElement("img");
+          img.src = e.target.result;
+          const pageDiv = $('<div class="page"></div>').append(img);
+          flipbook.append(pageDiv);
+
+          loaded++;
+          if (loaded === imageFiles.length) {
+            initializeBook();
+          }
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    // ========================
+    // 📘 INICIALIZAR LIBRO
+    // ========================
+    function initializeBook() {
+      setTimeout(() => {
+        flipbook.turn("destroy"); // eliminar si ya existe
+        flipbook.turn({
+          width: 800,
+          height: 500,
+          autoCenter: true,
+          gradients: true,
+          elevation: 50
+        });
+      }, 500);
+    }
+  </script>
+</body>
+</html>
